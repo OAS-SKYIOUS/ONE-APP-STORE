@@ -37,7 +37,7 @@ fun Settingsscreen(
     viewModel: SettingsViewModel = viewModel()
 ) {
 
-    val includeFDroid by viewModel().includeFDroidSources.collectAsState()
+    val includeFDroid by viewModel.includeFDroidSources.collectAsState()
 
     val viewModel: SettingsViewModel = viewModel()
 
