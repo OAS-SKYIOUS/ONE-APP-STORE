@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
     private val settingsRepo = SettingsRepository(app)
-    private val indexRepo = IndexRepository(app, settingsRepo)
+    private val indexRepo = IndexRepository(app, settingsRepo, settingsRepo)
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()

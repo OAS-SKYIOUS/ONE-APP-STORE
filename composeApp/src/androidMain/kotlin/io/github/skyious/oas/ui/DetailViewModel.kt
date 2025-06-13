@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 
 class DetailViewModel(app: Application) : AndroidViewModel(app) {
     private val settingsRepo = SettingsRepository(app)
-    private val indexRepo = IndexRepository(app, settingsRepo)
+    private val indexRepo = IndexRepository(app, settingsRepo, settingsRepo)
 
     private val _detail = MutableStateFlow<AppDetail?>(null)
     val detail: StateFlow<AppDetail?> = _detail

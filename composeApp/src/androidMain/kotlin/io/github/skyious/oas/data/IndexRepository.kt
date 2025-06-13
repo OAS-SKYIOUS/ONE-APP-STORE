@@ -1,11 +1,13 @@
 package io.github.skyious.oas.data
 
+import android.app.Application
 import android.content.Context
 import android.util.Log
 import io.github.skyious.oas.data.model.AppDetail
 import io.github.skyious.oas.data.model.AppInfo
 import io.github.skyious.oas.data.model.SourceType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -13,6 +15,7 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.yaml.snakeyaml.Yaml
 import java.io.File
+import java.util.concurrent.Semaphore
 
 class IndexRepository(
     private val context: Context,
@@ -20,6 +23,7 @@ class IndexRepository(
     private val settingsRepo: SettingsRepository
 ) {
     private val client = OkHttpClient()
+    private val fdroidConcurrency = 10
 
     // Default CSV URL (replace with your actual default index URL)
     private val defaultIndexUrl = "https://raw.githubusercontent.com/SKYIOUS/index-repo-oneappstore/refs/heads/main/apps.one"
@@ -102,17 +106,40 @@ class IndexRepository(
     }
 
     /** For each custom repo URL, fetch apps and accumulate */
-    private fun fetchAllCustomSources(urls: List<String>): List<AppInfo> {
+    // Inside IndexRepository.kt
+
+    private suspend fun fetchAllCustomSources(urls: List<String>): List<AppInfo> {
         val result = mutableListOf<AppInfo>()
         for (repoUrl in urls) {
-            try {
-                val apps = fetchFromSingleCustomRepo(repoUrl)
-                result += apps
-            } catch (e: Exception) {
-                Log.e("IndexRepo", "Error fetching custom source $repoUrl", e)
+            // Try GitHub first
+            val ownerRepo = GitHubUtils.parseOwnerRepo(repoUrl)
+            if (ownerRepo != null) {
+                // existing GitHub logic
+                try {
+                    result += fetchFromSingleCustomRepo(repoUrl)
+                } catch ( e: Exception ) { /* log */ }
+            } else {
+                // Non-GitHub: treat as F-Droid if flag enabled
+                try {
+                    result += FdroidUtils.fetchFdroidApps(repoUrl)
+                } catch (e: Exception) {
+                    Log.w("IndexRepo", "Failed F-Droid repo: $repoUrl", e)
+                }
             }
         }
         return result
+    }
+
+
+    private suspend fun fetchFdroidSources(urls: List<String>): List<AppInfo> = coroutineScope {
+        val semaphore = Semaphore(fdroidConcurrency)
+        urls.map { repoUrl ->
+            async {
+                semaphore.withPermit {
+                    FdroidUtils.fetchFdroidApps(repoUrl)
+                }
+            }
+        }.awaitAll().flatten()
     }
 
     /**
