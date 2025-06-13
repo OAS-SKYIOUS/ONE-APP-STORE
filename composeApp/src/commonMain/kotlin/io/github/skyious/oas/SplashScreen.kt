@@ -21,14 +21,7 @@ import androidx.compose.ui.res.painterResource
 
 
 @Composable
-
-fun Splashscreen (onTimeUp: () -> Unit) {
-    LaunchedEffect(Unit) {
-
-        delay(2000L)
-        onTimeUp()
-    }
-
+fun Splashscreen () {
     Box(
         modifier = Modifier
             .fillMaxSize()

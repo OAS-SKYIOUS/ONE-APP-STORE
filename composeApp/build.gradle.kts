@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.composeHotReload)
+
 }
 
 kotlin {
@@ -26,6 +27,11 @@ kotlin {
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
+            implementation("io.coil-kt:coil-compose:2.7.0")
+            implementation ("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
+            implementation ("androidx.datastore:datastore-preferences:1.1.7")
+            implementation ("androidx.navigation:navigation-compose:2.9.0")
+
         }
         commonMain.dependencies {
             implementation(compose.runtime)
@@ -36,6 +42,18 @@ kotlin {
             implementation(compose.components.uiToolingPreview)
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.runtimeCompose)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.cio)
+            implementation(libs.ktor.client.android)
+            implementation(libs.okio)
+            implementation (libs.androidx.material3)
+            implementation("org.yaml:snakeyaml:1.33")
+            implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+
+
+
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
