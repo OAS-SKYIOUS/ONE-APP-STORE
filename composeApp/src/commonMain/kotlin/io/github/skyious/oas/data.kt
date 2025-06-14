@@ -44,7 +44,18 @@ class AppRepository(
                         name = cols[0].trim(),
                         author = cols[1].trim(),
                         logoUrl = cols[2].trim(),
-                        configUrl = cols[3].trim()
+                        configUrl = cols[3].trim(),
+                        id = null,
+                        packageName = TODO(),
+                        summary = TODO(),
+                        description = TODO(),
+                        downloadUrl = TODO(),
+                        version = TODO(),
+                        source = TODO(),
+                        images = TODO(),
+                        changelog = TODO(),
+                        otherFields = TODO(),
+                        metadataUrl = TODO()
                     )
                 } else null
             }

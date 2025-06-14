@@ -4,7 +4,8 @@ package io.github.skyious.oas.data
 object FdroidRepos {
     val ALL: List<String> = listOf(
         "https://f-droid.org/repo",
-        "https://f-droid.org/archive",
+        "https://f-droid.org/repo/index-v1.jar",
+       /* "https://f-droid.org/archive",
         "https://guardianproject.info/fdroid/repo",
         "https://guardianproject.info/fdroid/archive",
         "https://apt.izzysoft.de/fdroid/repo",
@@ -249,6 +250,6 @@ object FdroidRepos {
         "https://fdroid.shiftphones.com/fdroid/repo",
         "https://fdroid.shiftphones.com/fdroid/archive",
         "https://kotikone.xyz/fdroid/repo",
-        "https://kotikone.xyz/fdroid/archive"
+        "https://kotikone.xyz/fdroid/archive" */
     )
 }

@@ -1,11 +1,11 @@
 package io.github.skyious.oas.data
 
-import android.app.Application
 import android.content.Context
 import android.util.Log
 import io.github.skyious.oas.data.model.AppDetail
 import io.github.skyious.oas.data.model.AppInfo
 import io.github.skyious.oas.data.model.SourceType
+import io.github.skyious.oas.utils.FdroidUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
@@ -16,6 +16,8 @@ import org.json.JSONArray
 import org.yaml.snakeyaml.Yaml
 import java.io.File
 import java.util.concurrent.Semaphore
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 
 class IndexRepository(
     private val context: Context,
@@ -55,13 +57,22 @@ class IndexRepository(
         }
 
         // 3) load F-Droid if toggled on
-        val fdroid = if (settingsRepo.includeFDroidFlow.first()) {
-            fetchAllCustomSources(FdroidRepos.ALL)
-        } else emptyList()
+        val fdroid: List<AppInfo>
+        val shouldIncludeFDroid = settingsRepo.includeFDroidFlow.first()
+        Log.d("IndexRepo_FDroid", "Should include F-Droid: $shouldIncludeFDroid")
 
-        // 3. Merge
+        if (shouldIncludeFDroid) {
+            Log.d("IndexRepo_FDroid", "Attempting to fetch F-Droid sources from: ${FdroidRepos.ALL}")
+            // THIS IS THE LINE THAT SHOULD BE LOADING F-DROID APPS
+            fdroid = fetchAllCustomSources(FdroidRepos.ALL)
+            Log.d("IndexRepo_FDroid", "Fetched F-Droid apps count: ${fdroid.size}")
+        } else {
+            fdroid = emptyList()
+            Log.d("IndexRepo_FDroid", "Skipping F-Droid apps as per settings.")
+        }
+
         val merged = defaultApps + customApps + fdroid
-        // TODO: Optionally cache merged index locally.
+        Log.d("IndexRepo_FDroid", "Total merged apps count: ${merged.size}. default=${defaultApps.size}, custom=${customApps.size}, fdroid=${fdroid.size}")
         merged
     }
 
@@ -95,7 +106,17 @@ class IndexRepository(
                         name = parts[0].trim(),
                         author = parts[1].trim(),
                         logoUrl = parts[2].trim(),
-                        configUrl = parts[3].trim()
+                        configUrl = parts[3].trim(),
+                        id = null,
+                        packageName = null,
+                        summary = null,
+                        description = null,
+                        downloadUrl = null,
+                        version = null,
+                        source = null,
+                        images = null,
+                        changelog = null,
+                        otherFields = null
                     )
                 } else {
                     Log.w("IndexRepo", "Skipping line (unexpected columns): $line")
@@ -106,40 +127,71 @@ class IndexRepository(
     }
 
     /** For each custom repo URL, fetch apps and accumulate */
-    // Inside IndexRepository.kt
-
+    // IndexRepository.kt
     private suspend fun fetchAllCustomSources(urls: List<String>): List<AppInfo> {
         val result = mutableListOf<AppInfo>()
-        for (repoUrl in urls) {
-            // Try GitHub first
+        Log.d("IndexRepo_FDroid", "fetchAllCustomSources called with URLs: $urls")
+        for (repoUrl in urls) { // repoUrl here IS a String from FdroidRepos.ALL
+            Log.d("IndexRepo_FDroid", "Processing URL: $repoUrl")
             val ownerRepo = GitHubUtils.parseOwnerRepo(repoUrl)
-            if (ownerRepo != null) {
-                // existing GitHub logic
+            val isFdroid = isFdroidUrl(repoUrl) // Assuming you have this helper
+            Log.d("IndexRepo_FDroid", "URL: $repoUrl, isGitHub: ${ownerRepo != null}, isFdroidHint: $isFdroid")
+
+            if (ownerRepo != null && !isFdroid) { // It's GitHub and not explicitly an F-Droid URL
+                Log.d("IndexRepo_FDroid", "Treating $repoUrl as GitHub (non-F-Droid)")
+                // ... your GitHub logic for fetchFromSingleCustomRepo(repoUrl)
+                // For now, let's assume this part is NOT for F-Droid and we can simplify:
+                // result += fetchFromSingleCustomRepo(repoUrl)
+            } else { // Assumed F-Droid, or it IS an F-Droid URL
+                Log.d("IndexRepo_FDroid", "Treating $repoUrl as F-Droid")
                 try {
-                    result += fetchFromSingleCustomRepo(repoUrl)
-                } catch ( e: Exception ) { /* log */ }
-            } else {
-                // Non-GitHub: treat as F-Droid if flag enabled
-                try {
-                    result += FdroidUtils.fetchFdroidApps(repoUrl)
+                    // THIS IS THE CRITICAL CALL FOR F-DROID
+                    val appsFromThisFdroidRepo = FdroidUtils.fetchFdroidApps(repoUrl) // << BREAKPOINT/LOG 5 (Inside this function)
+                    Log.d("IndexRepo_FDroid", "Fetched ${appsFromThisFdroidRepo.size} apps from F-Droid URL: $repoUrl")
+                    result += appsFromThisFdroidRepo
                 } catch (e: Exception) {
-                    Log.w("IndexRepo", "Failed F-Droid repo: $repoUrl", e)
+                    Log.w("IndexRepo_FDroid", "Failed to fetch or parse F-Droid repo: $repoUrl", e)
                 }
             }
         }
+        Log.d("IndexRepo_FDroid", "fetchAllCustomSources finished, total apps found: ${result.size}")
         return result
     }
 
+    // Helper (you might need a more robust check)
+    private fun isFdroidUrl(url: String): Boolean {
+        return url.contains("/fdroid/repo", ignoreCase = true) ||
+                url.endsWith(".jar", ignoreCase = true) ||
+                url.endsWith(".json", ignoreCase = true) ||
+                url.startsWith("https://guardianproject.info/fdroid/repo", ignoreCase = true) // Example specific F-Droid host
+    }
 
-    private suspend fun fetchFdroidSources(urls: List<String>): List<AppInfo> = coroutineScope {
-        val semaphore = Semaphore(fdroidConcurrency)
+
+    suspend fun fetchFdroidSources(urls: List<AppInfo>): List<AppInfo> = coroutineScope {
+        val semaphore = Semaphore(fdroidConcurrency) // fdroidConcurrency should be defined in your class
+
         urls.map { repoUrl ->
             async {
                 semaphore.withPermit {
-                    FdroidUtils.fetchFdroidApps(repoUrl)
+                    try {
+                        FdroidUtils.fetchFdroidApps(repoUrl.toString())
+                    } catch (e: Exception) {
+                        Log.w("IndexRepository", "Failed to fetch F-Droid source: $repoUrl", e)
+                        emptyList<AppInfo>() // Return an empty list for this specific failed source
+                    }
                 }
             }
         }.awaitAll().flatten()
+    }
+
+
+    suspend fun <T> Semaphore.withPermit(action: suspend () -> T): T {
+        acquire()
+        try {
+            return action()
+        } finally {
+            release()
+        }
     }
 
     /**
@@ -198,7 +250,18 @@ class IndexRepository(
                                 name = nameVal,
                                 author = authorVal,
                                 logoUrl = logoVal,
-                                configUrl = downloadVal
+                                configUrl = downloadVal,
+                                id = null,
+                                packageName = null,
+                                summary = null,
+                                description = null,
+                                downloadUrl = null,
+                                version = null,
+                                source = null,
+                                images = null,
+                                changelog = null,
+                                otherFields = null,
+                                metadataUrl = null
                             )
                         } else {
                             Log.w("IndexRepo", "Missing required fields in $folderName of $repoUrl")
@@ -411,11 +474,16 @@ class IndexRepository(
                     val metaUrl = appInfo.metadataUrl ?: return@withContext null
                     fetchRawText(metaUrl)
                 }
+
+                SourceType.GITHUB -> null
+                SourceType.FDROID -> null
+                null -> null
             }
+
             if (yamlText.isNullOrBlank()) return@withContext null
 
             // Parse YAML into Map<String,Any>
-            val yaml = org.yaml.snakeyaml.Yaml()
+            val yaml = Yaml()
             val loaded = yaml.load<Any>(yamlText)
             if (loaded !is Map<*, *>) return@withContext null
 
@@ -458,20 +526,23 @@ class IndexRepository(
 
             // Build AppDetail
             AppDetail(
-                name = name,
-                packageName = packageName,
+                id = packageName.toString(),
+                name = name.toString(),
+                packageName = packageName.toString(),
                 version = version,
                 description = description,
-                downloadUrl = downloadUrl,
+                downloadUrl = downloadUrl.toString(),
                 logoUrl = logoUrl,
                 images = images,
                 changelog = changelog,
                 author = author,
+                source =  null,
+                summary = description,
                 otherFields = metaMap.filterKeys { key ->
                     // exclude keys already extracted
                     val lower = key.lowercase()
                     lower !in setOf("name", "appname", "packagename", "version", "description", "downloadurl", "logoUrl".lowercase(),
-                        "author", "images", "screenshots", "changelog")
+                        "author", "images", "screenshots", "changelog", "id", "summary", "source")
                 }
             )
         } catch (e: Exception) {
@@ -479,5 +550,16 @@ class IndexRepository(
             null
         }
     }
+
+    suspend fun getDefaultApps(forceRefresh: Boolean): List<AppInfo> = withContext(Dispatchers.IO) {
+        val defaultCsvText = if (forceRefresh || !defaultCacheFile.exists()) downloadAndCacheDefaultCsv() else defaultCacheFile.readText()
+        val defaultApps = parseCsv(defaultCsvText)
+        // Also custom GitHub:
+        val custom = if (settingsRepo.allowOtherSourcesFlow.first()) {
+            fetchAllCustomSources(settingsRepo.customSourceUrlsFlow.first())
+        } else emptyList()
+        defaultApps + custom
+    }
+
 
 }

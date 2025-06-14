@@ -87,7 +87,7 @@ fun Discoverscreen(
 
     val filtered = apps.filter {
         it.name.contains(query, ignoreCase = true) ||
-                it.author.contains(query, ignoreCase = true)
+                it.author?.contains(query, ignoreCase = true) == true
     }
 
     Scaffold(
