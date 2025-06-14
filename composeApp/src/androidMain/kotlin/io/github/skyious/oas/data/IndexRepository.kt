@@ -5,7 +5,7 @@ import android.util.Log
 import io.github.skyious.oas.data.model.AppDetail
 import io.github.skyious.oas.data.model.AppInfo
 import io.github.skyious.oas.data.model.SourceType
-import io.github.skyious.oas.utils.FdroidUtils
+import io.github.skyious.oas.utils.fetchFdroidApps
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
@@ -146,7 +146,7 @@ class IndexRepository(
                 Log.d("IndexRepo_FDroid", "Treating $repoUrl as F-Droid")
                 try {
                     // THIS IS THE CRITICAL CALL FOR F-DROID
-                    val appsFromThisFdroidRepo = FdroidUtils.fetchFdroidApps(repoUrl) // << BREAKPOINT/LOG 5 (Inside this function)
+                    val appsFromThisFdroidRepo = fetchFdroidApps(repoUrl) // << BREAKPOINT/LOG 5 (Inside this function)
                     Log.d("IndexRepo_FDroid", "Fetched ${appsFromThisFdroidRepo.size} apps from F-Droid URL: $repoUrl")
                     result += appsFromThisFdroidRepo
                 } catch (e: Exception) {
@@ -174,7 +174,7 @@ class IndexRepository(
             async {
                 semaphore.withPermit {
                     try {
-                        FdroidUtils.fetchFdroidApps(repoUrl.toString())
+                        fetchFdroidApps(repoUrl.toString())
                     } catch (e: Exception) {
                         Log.w("IndexRepository", "Failed to fetch F-Droid source: $repoUrl", e)
                         emptyList<AppInfo>() // Return an empty list for this specific failed source
