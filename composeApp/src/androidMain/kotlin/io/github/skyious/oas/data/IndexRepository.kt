@@ -2,10 +2,10 @@ package io.github.skyious.oas.data
 
 import android.content.Context
 import android.util.Log
+import com.myorg.oneappstore.shared.util.FdroidUtils.fetchFdroidApps
 import io.github.skyious.oas.data.model.AppDetail
 import io.github.skyious.oas.data.model.AppInfo
 import io.github.skyious.oas.data.model.SourceType
-import io.github.skyious.oas.utils.fetchFdroidApps
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
@@ -26,6 +26,7 @@ class IndexRepository(
 ) {
     private val client = OkHttpClient()
     private val fdroidConcurrency = 10
+    private val source: SourceType? = null
 
     // Default CSV URL (replace with your actual default index URL)
     private val defaultIndexUrl = "https://raw.githubusercontent.com/SKYIOUS/index-repo-oneappstore/refs/heads/main/apps.one"
@@ -464,7 +465,7 @@ class IndexRepository(
     // In IndexRepository or separate AppDetailRepository
     suspend fun fetchAppDetail(appInfo: AppInfo): AppDetail? = withContext(Dispatchers.IO) {
         try {
-            val yamlText: String? = when (appInfo.source) {
+            val yamlText: String? = when (source) {
                 SourceType.DEFAULT -> {
                     // configUrl should be non-null
                     val url = appInfo.configUrl ?: return@withContext null

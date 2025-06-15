@@ -1,7 +1,5 @@
 package io.github.skyious.oas.data.model
 
-import java.sql.Time
-
 /**
  * Full metadata for an app, parsed from YAML.
  * Fields are nullable if missing. Additional fields are kept in `extraFields`.
@@ -41,7 +39,7 @@ data class AppInfo(
     val logoUrl: String?,
     val downloadUrl: String? = null,
     val version: String? = null,
-    val source: SourceType? = null,
+    val source: String? = null,
     val images: List<String>? = emptyList(),
     val changelog: String? = null,
     val otherFields: Map<String, Any?>? = emptyMap(),
