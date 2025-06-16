@@ -25,6 +25,7 @@ import android.util.Patterns
 import androidx.compose.runtime.saveable.rememberSaveable
 import io.github.skyious.oas.ui.SettingsViewModel
 import io.github.skyious.oas.data.SettingsRepository
+import kotlinx.coroutines.launch
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,6 +52,11 @@ fun Settingsscreen(
     var newUrl by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     // Local state for showing URL validation error
     var urlError by remember { mutableStateOf<String?>(null) }
+    
+    // Refresh interval state
+    val refreshInterval by viewModel.refreshIntervalFlow.collectAsState(initial = SettingsRepository.DEFAULT_REFRESH_INTERVAL)
+    val refreshIntervalOptions = SettingsRepository.getRefreshIntervalOptions()
+    var showRefreshIntervalDialog by remember { mutableStateOf(false) }
 
 
 
@@ -136,7 +142,18 @@ fun Settingsscreen(
                 )
             }
 
-            // 5. A footer or legal text
+            // 5. Refresh interval setting
+            ListItem(
+                headlineContent = { Text("Refresh interval") },
+                supportingContent = { 
+                    Text(
+                        refreshIntervalOptions.entries.find { it.value == refreshInterval }?.key ?: "1 day"
+                    )
+                },
+                modifier = Modifier.clickable { showRefreshIntervalDialog = true }
+            )
+            
+            // 6. A footer or legal text
             Text(
                 text = "© 2025 SKYIOUS, Github.",
                 style = MaterialTheme.typography.bodySmall,
@@ -303,11 +320,51 @@ fun Settingsscreen(
                 }
             )
         }
+        
+        // Refresh interval dialog
+        if (showRefreshIntervalDialog) {
+            AlertDialog(
+                onDismissRequest = { showRefreshIntervalDialog = false },
+                title = { Text("Set refresh interval") },
+                text = {
+                    Column {
+                        refreshIntervalOptions.keys.forEach { label ->
+                            val intervalMs = refreshIntervalOptions[label]!!
+                            val selected = refreshInterval == intervalMs
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.setRefreshInterval(intervalMs)
+                                        showRefreshIntervalDialog = false
+                                    }
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = selected,
+                                    onClick = {
+                                        viewModel.setRefreshInterval(intervalMs)
+                                        showRefreshIntervalDialog = false
+                                    }
+                                )
+                                Text(
+                                    text = label,
+                                    modifier = Modifier.padding(start = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showRefreshIntervalDialog = false }) {
+                        Text("CANCEL")
+                    }
+                }
+            )
+        }
     }
 }
-
-
-
 
 
 

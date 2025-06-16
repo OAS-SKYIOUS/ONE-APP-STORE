@@ -40,10 +40,28 @@ class IndexRepository(
      * Otherwise, read default CSV cache; optionally read custom cache or re-fetch based on policy.
      */
     suspend fun getApps(forceRefresh: Boolean = false): List<AppInfo> = withContext(Dispatchers.IO) {
-        // 1. Load default apps
-        val defaultCsvText = if (forceRefresh || !defaultCacheFile.exists()) {
-            downloadAndCacheDefaultCsv()
+        // 1. Check if we need to refresh based on settings and force refresh flag
+        val shouldRefresh = forceRefresh || settingsRepo.shouldRefreshData()
+        Log.d("IndexRepo", "Fetching apps. Force refresh: $forceRefresh, Should refresh: $shouldRefresh")
+        
+        // 2. Load default apps from cache if it exists and we don't need to refresh
+        val defaultCsvText = if (shouldRefresh || !defaultCacheFile.exists()) {
+            try {
+                downloadAndCacheDefaultCsv().also {
+                    // Update last refresh timestamp only after successful download
+                    settingsRepo.updateLastRefreshTimestamp()
+                    Log.d("IndexRepo", "Successfully downloaded and cached default CSV")
+                }
+            } catch (e: Exception) {
+                Log.e("IndexRepo", "Failed to download default CSV, using cached version if available", e)
+                if (defaultCacheFile.exists()) {
+                    defaultCacheFile.readText()
+                } else {
+                    ""
+                }
+            }
         } else {
+            Log.d("IndexRepo", "Using cached default CSV")
             defaultCacheFile.readText()
         }
         val defaultApps = parseCsv(defaultCsvText)
@@ -79,17 +97,26 @@ class IndexRepository(
 
     /** Download default CSV and cache it */
     private fun downloadAndCacheDefaultCsv(): String {
-        return try {
-            val request = Request.Builder().url(defaultIndexUrl).build()
-            client.newCall(request).execute().use { resp ->
-                val body = resp.body?.string() ?: ""
-                defaultCacheFile.writeText(body)
-                Log.d("IndexRepo", "Downloaded default CSV, size=${body.length}")
-                body
+        val request = Request.Builder()
+            .url(defaultIndexUrl)
+            .addHeader("Cache-Control", "no-cache") // Ensure we get fresh data
+            .build()
+            
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw Exception("Failed to download: ${response.code} - ${response.message}")
             }
-        } catch (e: Exception) {
-            Log.e("IndexRepo", "Failed to download default CSV", e)
-            ""
+            
+            val body = response.body?.string() ?: throw Exception("Empty response body")
+            if (body.isBlank()) {
+                throw Exception("Empty CSV content")
+            }
+            
+            // Only write to file if we have valid content
+            defaultCacheFile.parentFile?.mkdirs()
+            defaultCacheFile.writeText(body)
+            Log.d("IndexRepo", "Successfully downloaded and cached default CSV, size=${body.length}")
+            return body
         }
     }
 

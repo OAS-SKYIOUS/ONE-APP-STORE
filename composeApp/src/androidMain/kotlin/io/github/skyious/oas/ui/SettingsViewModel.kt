@@ -5,6 +5,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.skyious.oas.data.SettingsRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -53,6 +54,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun removeCustomSource(url: String) {
         viewModelScope.launch {
             repo.removeCustomSourceUrl(url)
+        }
+    }
+    
+    // Refresh interval flow
+    val refreshIntervalFlow: Flow<Long> = repo.refreshIntervalFlow
+    
+    // Set new refresh interval
+    fun setRefreshInterval(intervalMs: Long) {
+        viewModelScope.launch {
+            repo.setRefreshInterval(intervalMs)
         }
     }
 }

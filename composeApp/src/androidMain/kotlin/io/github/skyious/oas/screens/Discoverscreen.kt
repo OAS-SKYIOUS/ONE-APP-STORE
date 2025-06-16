@@ -63,26 +63,95 @@ import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.coroutineScope
 
 
+//@OptIn(ExperimentalMaterial3Api::class)
+//@Composable
+//fun Discoverscreen(
+//    viewModel: DiscoverViewModel = viewModel(),
+//    onAppClick: (io.github.skyious.oas.data.model.AppInfo) -> Unit
+//
+//) {
+//    val apps by viewModel.apps.collectAsState()
+//    var query by remember { mutableStateOf("") }
+//    var isLoading by remember { mutableStateOf(false) }
+//    val coroutineScope = rememberCoroutineScope()
+//
+//
+//    LaunchedEffect(Unit) {
+//        isLoading = true
+//        try {
+//            viewModel.loadApps(forceRefresh = false)
+//        } finally {
+//            isLoading = false
+//        }
+//    }
+//
+//    val filtered = apps.filter {
+//        it.name.contains(query, ignoreCase = true) ||
+//                it.author?.contains(query, ignoreCase = true) == true
+//    }
+//
+//    Scaffold(
+//        topBar = {
+//            TopAppBar(
+//                title = { Text("Discover") },
+//                actions = {
+//                    IconButton(onClick = {
+//                        isLoading = true
+//                        coroutineScope.launch { // Use the coroutineScope to launch a new coroutine
+//                            isLoading = true
+//                            try {
+//                                viewModel.loadApps(forceRefresh = true) // Changed to true for refresh button
+//                            } finally {
+//                                isLoading = false
+//                            }
+//                        }
+//
+//                    }) {
+//                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+//                    }
+//                }
+//            )
+//        }
+//    ) { padding ->
+//        Column(Modifier.padding(padding)) {
+//            OutlinedTextField(
+//                value = query,
+//                onValueChange = { query = it },
+//                modifier = Modifier
+//                    .fillMaxWidth()
+//                    .padding(16.dp),
+//                placeholder = { Text("Search apps…") },
+//                singleLine = true,
+//                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
+//            )
+//            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+//                when {
+//                    isLoading -> CircularProgressIndicator()
+//                    filtered.isEmpty() -> Text("No apps found.", style = MaterialTheme.typography.bodyMedium)
+//                    else -> LazyColumn {
+//                        items(filtered) { app ->
+//                            AppRow(app = app, onClick = { onAppClick(app) })
+//                            Divider()
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//    }
+//}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Discoverscreen(
     viewModel: DiscoverViewModel = viewModel(),
     onAppClick: (io.github.skyious.oas.data.model.AppInfo) -> Unit
-
 ) {
     val apps by viewModel.apps.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
     var query by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(false) }
-    val coroutineScope = rememberCoroutineScope()
-
 
     LaunchedEffect(Unit) {
-        isLoading = true
-        try {
-            viewModel.loadApps(forceRefresh = false)
-        } finally {
-            isLoading = false
-        }
+        viewModel.loadApps(forceRefresh = false)
     }
 
     val filtered = apps.filter {
@@ -95,42 +164,45 @@ fun Discoverscreen(
             TopAppBar(
                 title = { Text("Discover") },
                 actions = {
-                    IconButton(onClick = {
-                        isLoading = true
-                        coroutineScope.launch { // Use the coroutineScope to launch a new coroutine
-                            isLoading = true
-                            try {
-                                viewModel.loadApps(forceRefresh = true) // Changed to true for refresh button
-                            } finally {
-                                isLoading = false
-                            }
-                        }
-
-                    }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                    IconButton(onClick = { viewModel.loadApps(forceRefresh = true) }) {
+                        Icon(Icons.Default.Refresh, "Refresh")
                     }
                 }
             )
         }
     ) { padding ->
-        Column(Modifier.padding(padding)) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                placeholder = { Text("Search apps…") },
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
-            )
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                when {
-                    isLoading -> CircularProgressIndicator()
-                    filtered.isEmpty() -> Text("No apps found.", style = MaterialTheme.typography.bodyMedium)
-                    else -> LazyColumn {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            when {
+                isLoading -> {
+                    // Show loading indicator centered
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+                filtered.isEmpty() -> {
+                    // Show empty state
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No apps found.", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                else -> {
+                    // Show app list
+                    LazyColumn {
                         items(filtered) { app ->
-                            AppRow(app = app, onClick = { onAppClick(app) })
+                            AppRow(
+                                app = app,
+                                onClick = { onAppClick(app) }
+                            )
                             Divider()
                         }
                     }
