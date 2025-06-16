@@ -100,16 +100,13 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             composable("detail") {
-                                val app = sharedVM.selectedApp.collectAsState().value
-                                if (app != null) {
-                                    DetailScreen(appInfo = app as AppInfo)
-                                } else {
-                                    LaunchedEffect(Unit) {
-                                        navController.popBackStack()
-                                    }
+                                sharedVM.selectedApp.collectAsState().value?.let { appInfo ->
+                                    DetailScreen(
+                                        appInfo = appInfo,
+                                        onBackPress = { navController.popBackStack() }
+                                    )
                                 }
                             }
-
                         }
                     }
                 }
