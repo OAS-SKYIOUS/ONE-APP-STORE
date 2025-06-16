@@ -486,7 +486,7 @@ class IndexRepository(
         // 3. Fetch raw YAML text
         val rawUrl = GitHubUtils.rawBase(owner, repo, branch) + "apps/$folderName/$yamlFileName"
         val yamlText = fetchRawText(rawUrl) ?: return null
-        // 4. Parse into Map<String, Any>
+        // 4. Parse into Map<String,Any>
         return try {
             val yaml = Yaml()
             val data = yaml.load<Any>(yamlText)
@@ -547,91 +547,96 @@ class IndexRepository(
 
     // In IndexRepository or separate AppDetailRepository
     suspend fun fetchAppDetail(appInfo: AppInfo): AppDetail? = withContext(Dispatchers.IO) {
-        try {
-            val yamlText: String? = when (source) {
-                SourceType.DEFAULT -> {
-                    // configUrl should be non-null
-                    val url = appInfo.configUrl ?: return@withContext null
-                    fetchRawText(url)
+        Log.d("IndexRepo_Detail", "Fetching detail for '${appInfo.name}'. ConfigUrl: '${appInfo.configUrl}'")
+
+        // Path 1: App has a configUrl pointing to a detailed YAML file.
+        if (!appInfo.configUrl.isNullOrBlank()) {
+            Log.d("IndexRepo_Detail", "Path 1: Fetching from configUrl: ${appInfo.configUrl}")
+            try {
+                val yamlText = fetchRawText(appInfo.configUrl!!)
+                if (yamlText.isNullOrBlank()) {
+                    Log.e("IndexRepo_Detail", "YAML text is null or blank for URL: ${appInfo.configUrl}")
+                    return@withContext null
                 }
-                SourceType.CUSTOM -> {
-                    val metaUrl = appInfo.metadataUrl ?: return@withContext null
-                    fetchRawText(metaUrl)
+                Log.d("IndexRepo_Detail", "Received YAML for ${appInfo.name}: \n$yamlText")
+
+                @Suppress("UNCHECKED_CAST")
+                val metaMap = (Yaml().load<Any>(yamlText) as? Map<String, Any>)?.toMutableMap()
+                if (metaMap == null) {
+                    Log.e("IndexRepo_Detail", "Parsed YAML is not a map for ${appInfo.name}")
+                    return@withContext null
+                }
+                Log.d("IndexRepo_Detail", "Parsed meta map: $metaMap")
+
+                // Construct AppDetail from the parsed map
+                val name = metaMap["name"]?.toString() ?: appInfo.name
+                val packageName = metaMap["packageName"]?.toString()
+                val version = metaMap["version"]?.toString()
+                val description = metaMap["description"]?.toString()
+                val downloadUrl = metaMap["downloadUrl"]?.toString()
+                val logoUrl = metaMap["logoUrl"]?.toString() ?: appInfo.logoUrl
+                val author = metaMap["author"]?.toString() ?: appInfo.author
+                val images: List<String> = when (val imgs = metaMap["images"]) {
+                    is List<*> -> imgs.mapNotNull { it?.toString() }
+                    is String -> listOf(imgs)
+                    else -> emptyList()
+                }
+                val changelog: String? = when (val ch = metaMap["changelog"]) {
+                    is List<*> -> ch.mapNotNull { it?.toString() }.joinToString("\n")
+                    is String -> ch
+                    else -> null
                 }
 
-                SourceType.GITHUB -> null
-                SourceType.FDROID -> null
-                null -> null
+                val appDetail = AppDetail(
+                    id = packageName ?: name,
+                    name = name,
+                    packageName = packageName,
+                    version = version,
+                    description = description,
+                    downloadUrl = downloadUrl ?: "",
+                    logoUrl = logoUrl,
+                    images = images,
+                    changelog = changelog,
+                    author = author,
+                    source = SourceType.DEFAULT, // Assume default for now
+                    summary = metaMap["summary"]?.toString() ?: description,
+                    otherFields = metaMap.filterKeys { key ->
+                        !setOf("name", "appName", "packageName", "version", "description", "downloadUrl", "logoUrl", "author", "images", "screenshots", "changelog", "id", "summary", "source").contains(key.lowercase())
+                    }
+                )
+                Log.d("IndexRepo_Detail", "Successfully created AppDetail from YAML: $appDetail")
+                return@withContext appDetail
+
+            } catch (e: Exception) {
+                Log.e("IndexRepo_Detail", "Error fetching/parsing AppDetail from configUrl for ${appInfo.name}", e)
+                return@withContext null
             }
-
-            if (yamlText.isNullOrBlank()) return@withContext null
-
-            // Parse YAML into Map<String,Any>
-            val yaml = Yaml()
-            val loaded = yaml.load<Any>(yamlText)
-            if (loaded !is Map<*, *>) return@withContext null
-
-            // Convert to Map<String,Any>
-            val metaMap = mutableMapOf<String, Any>()
-            for ((k, v) in loaded) {
-                val key = k?.toString()?.trim() ?: continue
-                if (v != null) {
-                    metaMap[key] = v
-                }
+        }
+        // Path 2: No configUrl. Assume it's an F-Droid app with details in AppInfo.
+        else {
+            Log.d("IndexRepo_Detail", "Path 2: No configUrl. Creating AppDetail directly from AppInfo for ${appInfo.name}")
+            try {
+                val appDetail = AppDetail(
+                    id = appInfo.packageName ?: appInfo.id ?: appInfo.name,
+                    name = appInfo.name,
+                    packageName = appInfo.packageName,
+                    author = appInfo.author,
+                    summary = appInfo.summary ?: appInfo.description,
+                    description = appInfo.description,
+                    logoUrl = appInfo.logoUrl,
+                    downloadUrl = appInfo.downloadUrl ?: "",
+                    version = appInfo.version,
+                    source = SourceType.FDROID, // Assuming it's F-Droid
+                    images = appInfo.images ?: emptyList(),
+                    changelog = appInfo.changelog,
+                    otherFields = appInfo.otherFields ?: emptyMap()
+                )
+                Log.d("IndexRepo_Detail", "Successfully created AppDetail from AppInfo: $appDetail")
+                return@withContext appDetail
+            } catch (e: Exception) {
+                Log.e("IndexRepo_Detail", "Error creating AppDetail from AppInfo for ${appInfo.name}", e)
+                return@withContext null
             }
-
-            // Extract fields by key names; since different repos may use different keys, we rely on listinginfo for custom,
-            // but here for default we assume standard keys in config.one YAML (you define).
-            // For default, decide on the expected keys, e.g.: "name", "packageName", "version", "description", "downloadUrl", "logoUrl", "images", "changelog", "author"
-            // You can adjust these to match your config.one structure.
-            val name = metaMap["name"]?.toString()
-                ?: metaMap["appName"]?.toString()
-                ?: metaMap["packageName"]?.toString()  // fallback
-            val packageName = metaMap["packageName"]?.toString()
-            val version = metaMap["version"]?.toString()
-            val description = metaMap["description"]?.toString()
-            val downloadUrl = metaMap["downloadUrl"]?.toString()
-            // maybe config.one uses "download_link" or similar; you can check metaMap keys or use listinginfo for custom
-            val logoUrl = metaMap["logoUrl"]?.toString() ?: appInfo.logoUrl
-            val author = metaMap["author"]?.toString() ?: appInfo.author
-
-            // images: could be a list under key "images" or "screenshots"
-            val images: List<String> = when (val imgs = metaMap["images"]) {
-                is List<*> -> imgs.mapNotNull { it?.toString() }
-                is String -> listOf(imgs)  // maybe a single URL
-                else -> emptyList()
-            }
-            // changelog: perhaps a string or list. If list, join lines.
-            val changelog: String? = when (val ch = metaMap["changelog"]) {
-                is List<*> -> ch.mapNotNull { it?.toString() }.joinToString("\n")
-                is String -> ch
-                else -> null
-            }
-
-            // Build AppDetail
-            AppDetail(
-                id = packageName.toString(),
-                name = name.toString(),
-                packageName = packageName.toString(),
-                version = version,
-                description = description,
-                downloadUrl = downloadUrl.toString(),
-                logoUrl = logoUrl,
-                images = images,
-                changelog = changelog,
-                author = author,
-                source =  null,
-                summary = description,
-                otherFields = metaMap.filterKeys { key ->
-                    // exclude keys already extracted
-                    val lower = key.lowercase()
-                    lower !in setOf("name", "appname", "packagename", "version", "description", "downloadurl", "logoUrl".lowercase(),
-                        "author", "images", "screenshots", "changelog", "id", "summary", "source")
-                }
-            )
-        } catch (e: Exception) {
-            Log.e("IndexRepo", "Error fetching/parsing AppDetail for ${appInfo.name}", e)
-            null
         }
     }
 
