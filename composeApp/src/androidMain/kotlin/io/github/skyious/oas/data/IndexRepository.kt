@@ -18,6 +18,11 @@ import java.io.File
 import java.util.concurrent.Semaphore
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
 
 class IndexRepository(
     private val context: Context,
@@ -27,6 +32,12 @@ class IndexRepository(
     private val client = OkHttpClient()
     private val fdroidConcurrency = 10
     private val source: SourceType? = null
+    private val fdroidCacheDir = File(context.cacheDir, "fdroid_cache").apply { mkdirs() }
+    private val fdroidCacheFile = File(fdroidCacheDir, "fdroid_cache.json")
+    private val fdroidCache = mutableMapOf<String, List<AppInfo>>()
+    private val fdroidMutex = Mutex()
+    private val json = Json { ignoreUnknownKeys = true }
+
 
     // Default CSV URL (replace with your actual default index URL)
     private val defaultIndexUrl = "https://raw.githubusercontent.com/SKYIOUS/index-repo-oneappstore/refs/heads/main/apps.one"
@@ -45,26 +56,23 @@ class IndexRepository(
         Log.d("IndexRepo", "Fetching apps. Force refresh: $forceRefresh, Should refresh: $shouldRefresh")
         
         // 2. Load default apps from cache if it exists and we don't need to refresh
+        // Load default apps
         val defaultCsvText = if (shouldRefresh || !defaultCacheFile.exists()) {
             try {
                 downloadAndCacheDefaultCsv().also {
-                    // Update last refresh timestamp only after successful download
                     settingsRepo.updateLastRefreshTimestamp()
                     Log.d("IndexRepo", "Successfully downloaded and cached default CSV")
                 }
             } catch (e: Exception) {
                 Log.e("IndexRepo", "Failed to download default CSV, using cached version if available", e)
-                if (defaultCacheFile.exists()) {
-                    defaultCacheFile.readText()
-                } else {
-                    ""
-                }
+                if (defaultCacheFile.exists()) defaultCacheFile.readText() else ""
             }
         } else {
             Log.d("IndexRepo", "Using cached default CSV")
             defaultCacheFile.readText()
         }
         val defaultApps = parseCsv(defaultCsvText)
+
 
         // 2. Check settings for custom sources
         val allowOther = settingsRepository.allowOtherSourcesFlow.first()
@@ -77,22 +85,63 @@ class IndexRepository(
 
         // 3) load F-Droid if toggled on
         val fdroid: List<AppInfo>
-        val shouldIncludeFDroid = settingsRepo.includeFDroidFlow.first()
-        Log.d("IndexRepo_FDroid", "Should include F-Droid: $shouldIncludeFDroid")
 
-        if (shouldIncludeFDroid) {
-            Log.d("IndexRepo_FDroid", "Attempting to fetch F-Droid sources from: ${FdroidRepos.ALL}")
-            // THIS IS THE LINE THAT SHOULD BE LOADING F-DROID APPS
-            fdroid = fetchAllCustomSources(FdroidRepos.ALL)
-            Log.d("IndexRepo_FDroid", "Fetched F-Droid apps count: ${fdroid.size}")
+        val shouldIncludeFDroid = settingsRepo.includeFDroidFlow.first()
+        fdroid = if (shouldIncludeFDroid) {
+            if (shouldRefresh || !fdroidCacheFile.exists()) {
+                Log.d("IndexRepo_FDroid", "Fetching fresh F-Droid data")
+                try {
+                    fetchAndCacheFdroidData()
+                } catch (e: Exception) {
+                    Log.e("IndexRepo_FDroid", "Failed to fetch F-Droid data, using cache", e)
+                    loadCachedFdroidData()
+                }
+            } else {
+                Log.d("IndexRepo_FDroid", "Using cached F-Droid data")
+                loadCachedFdroidData()
+            }
         } else {
-            fdroid = emptyList()
-            Log.d("IndexRepo_FDroid", "Skipping F-Droid apps as per settings.")
+           emptyList()
         }
 
-        val merged = defaultApps + customApps + fdroid
+        val merged = customApps + defaultApps + fdroid
+
+
         Log.d("IndexRepo_FDroid", "Total merged apps count: ${merged.size}. default=${defaultApps.size}, custom=${customApps.size}, fdroid=${fdroid.size}")
         merged
+    }
+
+    private suspend fun fetchAndCacheFdroidData(): List<AppInfo> = fdroidMutex.withLock {
+        Log.d("IndexRepo_FDroid", "Fetching fresh F-Droid data")
+        val fdroidUrls = FdroidRepos.ALL
+        val apps = fetchAllCustomSources(fdroidUrls)
+
+        // Cache the results
+        try {
+            fdroidCacheFile.writeText(json.encodeToString(apps))
+            fdroidCache[fdroidUrls.joinToString()] = apps
+            settingsRepo.updateLastRefreshTimestamp() // Update timestamp after successful fetch
+            Log.d("IndexRepo_FDroid", "Successfully cached F-Droid data")
+        } catch (e: Exception) {
+            Log.e("IndexRepo_FDroid", "Failed to cache F-Droid data", e)
+        }
+        apps
+    }
+
+    private suspend fun loadCachedFdroidData(): List<AppInfo> = fdroidMutex.withLock {
+        fdroidCache.values.flatten().takeIf { it.isNotEmpty() }?.let { return it }
+
+        if (!fdroidCacheFile.exists()) return emptyList()
+
+        return try {
+            val cached = json.decodeFromString<List<AppInfo>>(fdroidCacheFile.readText())
+            fdroidCache[FdroidRepos.ALL.joinToString()] = cached
+            Log.d("IndexRepo_FDroid", "Loaded F-Droid data from disk cache")
+            cached
+        } catch (e: Exception) {
+            Log.e("IndexRepo_FDroid", "Failed to load cached F-Droid data", e)
+            emptyList()
+        }
     }
 
     /** Download default CSV and cache it */
@@ -156,34 +205,29 @@ class IndexRepository(
 
     /** For each custom repo URL, fetch apps and accumulate */
     // IndexRepository.kt
-    private suspend fun fetchAllCustomSources(urls: List<String>): List<AppInfo> {
-        val result = mutableListOf<AppInfo>()
-        Log.d("IndexRepo_FDroid", "fetchAllCustomSources called with URLs: $urls")
-        for (repoUrl in urls) { // repoUrl here IS a String from FdroidRepos.ALL
-            Log.d("IndexRepo_FDroid", "Processing URL: $repoUrl")
-            val ownerRepo = GitHubUtils.parseOwnerRepo(repoUrl)
-            val isFdroid = isFdroidUrl(repoUrl) // Assuming you have this helper
-            Log.d("IndexRepo_FDroid", "URL: $repoUrl, isGitHub: ${ownerRepo != null}, isFdroidHint: $isFdroid")
+    private suspend fun fetchAllCustomSources(urls: List<String>): List<AppInfo> = coroutineScope {
+        val cacheKey = urls.sorted().joinToString()
 
-            if (ownerRepo != null && !isFdroid) { // It's GitHub and not explicitly an F-Droid URL
-                Log.d("IndexRepo_FDroid", "Treating $repoUrl as GitHub (non-F-Droid)")
-                // ... your GitHub logic for fetchFromSingleCustomRepo(repoUrl)
-                // For now, let's assume this part is NOT for F-Droid and we can simplify:
-                // result += fetchFromSingleCustomRepo(repoUrl)
-            } else { // Assumed F-Droid, or it IS an F-Droid URL
-                Log.d("IndexRepo_FDroid", "Treating $repoUrl as F-Droid")
-                try {
-                    // THIS IS THE CRITICAL CALL FOR F-DROID
-                    val appsFromThisFdroidRepo = fetchFdroidApps(repoUrl) // << BREAKPOINT/LOG 5 (Inside this function)
-                    Log.d("IndexRepo_FDroid", "Fetched ${appsFromThisFdroidRepo.size} apps from F-Droid URL: $repoUrl")
-                    result += appsFromThisFdroidRepo
-                } catch (e: Exception) {
-                    Log.w("IndexRepo_FDroid", "Failed to fetch or parse F-Droid repo: $repoUrl", e)
-                }
+        // Check memory cache first
+        fdroidCache[cacheKey]?.let { return@coroutineScope it }
+
+        Log.d("IndexRepo_FDroid", "Fetching from network: $urls")
+        val result = mutableListOf<AppInfo>()
+
+        for (repoUrl in urls) {
+            Log.d("IndexRepo_FDroid", "Processing URL: $repoUrl")
+            try {
+                val apps = fetchFdroidApps(repoUrl)
+                result.addAll(apps)
+                Log.d("IndexRepo_FDroid", "Fetched ${apps.size} apps from $repoUrl")
+            } catch (e: Exception) {
+                Log.e("IndexRepo_FDroid", "Failed to fetch from $repoUrl", e)
             }
         }
-        Log.d("IndexRepo_FDroid", "fetchAllCustomSources finished, total apps found: ${result.size}")
-        return result
+
+        // Update cache
+        fdroidCache[cacheKey] = result
+        result
     }
 
     // Helper (you might need a more robust check)
