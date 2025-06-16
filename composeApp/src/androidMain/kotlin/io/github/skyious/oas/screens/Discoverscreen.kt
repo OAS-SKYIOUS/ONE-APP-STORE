@@ -46,6 +46,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -170,12 +171,52 @@ fun Discoverscreen(
             TopAppBar(
                 title = { Text("Discover") },
                 actions = {
-                    IconButton(
-                        onClick = { viewModel.loadApps(forceRefresh = true) },
-                        enabled = !isLoading
-                    ) {
-                        Icon(Icons.Default.Refresh, "Refresh")
+                    var showRefreshDialog by remember { mutableStateOf(false) }
+
+                    // Show confirmation dialog when needed
+                    if (showRefreshDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showRefreshDialog = false },
+                            title = { Text("Force Refresh") },
+                            text = { Text("This will ignore cache and fetch fresh data from the internet. Continue?") },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        showRefreshDialog = false
+                                        viewModel.loadApps(forceRefresh = true)
+                                    }
+                                ) {
+                                    Text("Refresh")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showRefreshDialog = false }) {
+                                    Text("Cancel")
+                                }
+                            }
+                        )
                     }
+
+                    // Refresh button with combined clickable for both click and long-click
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)  // Match IconButton size
+                            .combinedClickable(
+                                onClick = { viewModel.loadApps(forceRefresh = false) },
+                                onLongClick = {
+                                    showRefreshDialog = true
+                                }
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = if (isLoading) "Refreshing..." else "Refresh (long press to force refresh)",
+                            modifier = Modifier
+                                .padding(12.dp)  // Match IconButton padding
+                                .fillMaxSize()
+                        )
+                    }
+
                 }
             )
         }

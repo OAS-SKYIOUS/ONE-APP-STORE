@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 
 class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
     private val settingsRepo = SettingsRepository(app)
@@ -31,21 +32,33 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
     val progressMessage = _progressMessage.asStateFlow()
 
 
+    // In DiscoverViewModel.kt
     fun loadApps(forceRefresh: Boolean = false) {
         viewModelScope.launch {
             _isLoading.value = true
             _progress.value = 0f
-            _progressMessage.value = "Starting app list refresh..."
+            _progressMessage.value = if (forceRefresh)
+                "Forcing refresh from network..."
+            else
+                "Loading apps..."
 
             try {
-                // Get all apps in one go since the repository handles the caching
-                _progressMessage.value = "Loading apps..."
                 val allApps = indexRepo.getApps(forceRefresh)
                 _progress.value = 0.7f
+                _progressMessage.value = "Processing data..."
 
-                _progressMessage.value = "Finalizing..."
                 _apps.value = allApps
                 _progress.value = 1f
+                _progressMessage.value = if (forceRefresh)
+                    "Refreshed successfully"
+                else
+                    "Loaded successfully"
+
+                // Reset the success message after a short delay
+                if (!forceRefresh) {
+                    delay(1000) // Show success message for 1 second
+                    _progressMessage.value = ""
+                }
 
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -55,7 +68,6 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
             } finally {
                 _isLoading.value = false
             }
-
         }
     }
 }

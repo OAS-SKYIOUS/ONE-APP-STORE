@@ -84,24 +84,31 @@ class IndexRepository(
         }
 
         // 3) load F-Droid if toggled on
-        val fdroid: List<AppInfo>
 
         val shouldIncludeFDroid = settingsRepo.includeFDroidFlow.first()
-        fdroid = if (shouldIncludeFDroid) {
-            if (shouldRefresh || !fdroidCacheFile.exists()) {
-                Log.d("IndexRepo_FDroid", "Fetching fresh F-Droid data")
+        val fdroid: List<AppInfo> = if (shouldIncludeFDroid) {
+            if (forceRefresh) {
+                Log.d("IndexRepo_FDroid", "Force refreshing F-Droid data")
                 try {
-                    fetchAndCacheFdroidData()
+                    fetchAndCacheFdroidData(forceRefresh = true)  // Pass forceRefresh here
                 } catch (e: Exception) {
-                    Log.e("IndexRepo_FDroid", "Failed to fetch F-Droid data, using cache", e)
-                    loadCachedFdroidData()
+                    Log.e("IndexRepo_FDroid", "Failed to force refresh F-Droid data", e)
+                    emptyList()
+                }
+            } else if (!fdroidCacheFile.exists()) {
+                Log.d("IndexRepo_FDroid", "No cache found, fetching fresh F-Droid data")
+                try {
+                    fetchAndCacheFdroidData()  // No force refresh for normal operation
+                } catch (e: Exception) {
+                    Log.e("IndexRepo_FDroid", "Failed to fetch F-Droid data", e)
+                    emptyList()
                 }
             } else {
                 Log.d("IndexRepo_FDroid", "Using cached F-Droid data")
                 loadCachedFdroidData()
             }
         } else {
-           emptyList()
+            emptyList()
         }
 
         val merged = customApps + defaultApps + fdroid
@@ -111,16 +118,16 @@ class IndexRepository(
         merged
     }
 
-    private suspend fun fetchAndCacheFdroidData(): List<AppInfo> = fdroidMutex.withLock {
-        Log.d("IndexRepo_FDroid", "Fetching fresh F-Droid data")
+    private suspend fun fetchAndCacheFdroidData(forceRefresh: Boolean = false): List<AppInfo> = fdroidMutex.withLock {
+        Log.d("IndexRepo_FDroid", "Fetching fresh F-Droid data (forceRefresh: $forceRefresh)")
         val fdroidUrls = FdroidRepos.ALL
-        val apps = fetchAllCustomSources(fdroidUrls)
+        val apps = fetchAllCustomSources(fdroidUrls, forceRefresh)
 
         // Cache the results
         try {
             fdroidCacheFile.writeText(json.encodeToString(apps))
             fdroidCache[fdroidUrls.joinToString()] = apps
-            settingsRepo.updateLastRefreshTimestamp() // Update timestamp after successful fetch
+            settingsRepo.updateLastRefreshTimestamp()
             Log.d("IndexRepo_FDroid", "Successfully cached F-Droid data")
         } catch (e: Exception) {
             Log.e("IndexRepo_FDroid", "Failed to cache F-Droid data", e)
@@ -205,13 +212,18 @@ class IndexRepository(
 
     /** For each custom repo URL, fetch apps and accumulate */
     // IndexRepository.kt
-    private suspend fun fetchAllCustomSources(urls: List<String>): List<AppInfo> = coroutineScope {
+    private suspend fun fetchAllCustomSources(
+        urls: List<String>,
+        forceRefresh: Boolean = false
+    ): List<AppInfo> = coroutineScope {
         val cacheKey = urls.sorted().joinToString()
 
-        // Check memory cache first
-        fdroidCache[cacheKey]?.let { return@coroutineScope it }
+        // Skip memory cache if force refresh is true
+        if (!forceRefresh) {
+            fdroidCache[cacheKey]?.let { return@coroutineScope it }
+        }
 
-        Log.d("IndexRepo_FDroid", "Fetching from network: $urls")
+        Log.d("IndexRepo_FDroid", "Fetching from network: $urls (forceRefresh: $forceRefresh)")
         val result = mutableListOf<AppInfo>()
 
         for (repoUrl in urls) {
