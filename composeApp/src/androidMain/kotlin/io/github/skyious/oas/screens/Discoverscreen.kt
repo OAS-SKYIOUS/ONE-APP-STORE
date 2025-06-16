@@ -60,6 +60,7 @@ import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.launch
 import androidx.navigation.compose.*
 import coil.compose.rememberAsyncImagePainter
+import io.github.skyious.oas.ui.components.LoadingProgress
 import kotlinx.coroutines.coroutineScope
 
 
@@ -140,23 +141,28 @@ import kotlinx.coroutines.coroutineScope
 //    }
 //}
 
+// In Discoverscreen.kt
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Discoverscreen(
     viewModel: DiscoverViewModel = viewModel(),
-    onAppClick: (io.github.skyious.oas.data.model.AppInfo) -> Unit
+    onAppClick: (AppInfo) -> Unit
 ) {
     val apps by viewModel.apps.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val progress by viewModel.progress.collectAsState()
+    val progressMessage by viewModel.progressMessage.collectAsState()
     var query by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         viewModel.loadApps(forceRefresh = false)
     }
 
-    val filtered = apps.filter {
-        it.name.contains(query, ignoreCase = true) ||
-                it.author?.contains(query, ignoreCase = true) == true
+    val filtered = remember(apps, query) {
+        apps.filter {
+            it.name.contains(query, ignoreCase = true) ||
+                    it.author?.contains(query, ignoreCase = true) == true
+        }
     }
 
     Scaffold(
@@ -164,7 +170,10 @@ fun Discoverscreen(
             TopAppBar(
                 title = { Text("Discover") },
                 actions = {
-                    IconButton(onClick = { viewModel.loadApps(forceRefresh = true) }) {
+                    IconButton(
+                        onClick = { viewModel.loadApps(forceRefresh = true) },
+                        enabled = !isLoading
+                    ) {
                         Icon(Icons.Default.Refresh, "Refresh")
                     }
                 }
@@ -178,32 +187,38 @@ fun Discoverscreen(
         ) {
             when {
                 isLoading -> {
-                    // Show loading indicator centered
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
+                    LoadingProgress(
+                        progress = progress,
+                        message = progressMessage,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
                 }
                 filtered.isEmpty() -> {
-                    // Show empty state
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("No apps found.", style = MaterialTheme.typography.bodyMedium)
-                    }
+                    Text(
+                        "No apps found.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
                 }
                 else -> {
-                    // Show app list
-                    LazyColumn {
-                        items(filtered) { app ->
-                            AppRow(
-                                app = app,
-                                onClick = { onAppClick(app) }
-                            )
-                            Divider()
+                    Column {
+                        OutlinedTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            placeholder = { Text("Search apps...") },
+                            leadingIcon = { Icon(Icons.Default.Search, null) }
+                        )
+                        LazyColumn {
+                            items(filtered) { app ->
+                                AppRow(
+                                    app = app,
+                                    onClick = { onAppClick(app) }
+                                )
+                                Divider()
+                            }
                         }
                     }
                 }

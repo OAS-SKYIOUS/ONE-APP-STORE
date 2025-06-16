@@ -24,23 +24,38 @@ class DiscoverViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _apps = MutableStateFlow<List<AppInfo>>(emptyList())
     val apps = _apps.asStateFlow()
+    private val _progress = MutableStateFlow(0f)
+    val progress = _progress.asStateFlow()
 
-    // DiscoverViewModel.kt
-    // DiscoverViewModel.kt
+    private val _progressMessage = MutableStateFlow("Loading...")
+    val progressMessage = _progressMessage.asStateFlow()
+
+
     fun loadApps(forceRefresh: Boolean = false) {
         viewModelScope.launch {
             _isLoading.value = true
+            _progress.value = 0f
+            _progressMessage.value = "Starting app list refresh..."
+
             try {
-                // Get ALL apps, including F-Droid if enabled in settings, directly from getApps()
+                // Get all apps in one go since the repository handles the caching
+                _progressMessage.value = "Loading apps..."
                 val allApps = indexRepo.getApps(forceRefresh)
+                _progress.value = 0.7f
+
+                _progressMessage.value = "Finalizing..."
                 _apps.value = allApps
+                _progress.value = 1f
+
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Log.e("DiscoverViewModel", "Error loading apps", e)
-                _apps.value = emptyList() // Or some error state
+                _apps.value = emptyList()
+                _progressMessage.value = "Error: ${e.localizedMessage}"
             } finally {
                 _isLoading.value = false
             }
+
         }
     }
 }
