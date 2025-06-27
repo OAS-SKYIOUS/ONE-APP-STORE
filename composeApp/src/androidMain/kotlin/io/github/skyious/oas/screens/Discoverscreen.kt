@@ -1,266 +1,136 @@
 package io.github.skyious.oas.screens
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.runtime.Composable
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import io.github.skyious.oas.R
-import androidx.compose.ui.Alignment
-
-
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.input.ImeAction
-import io.github.skyious.oas.data.model.AppInfo
-import androidx.compose.material3.TopAppBar
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import coil.compose.rememberAsyncImagePainter
-import androidx.lifecycle.viewmodel.compose.viewModel
-
-
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.rememberAsyncImagePainter
-import kotlinx.coroutines.launch
-import androidx.navigation.compose.*
-import coil.compose.rememberAsyncImagePainter
+import coil.compose.AsyncImage
+import io.github.skyious.oas.data.IndexRepository
+import io.github.skyious.oas.data.model.AppInfo
 import io.github.skyious.oas.ui.components.LoadingProgress
-import kotlinx.coroutines.coroutineScope
+import androidx.compose.foundation.background
 
-
-//@OptIn(ExperimentalMaterial3Api::class)
-//@Composable
-//fun Discoverscreen(
-//    viewModel: DiscoverViewModel = viewModel(),
-//    onAppClick: (io.github.skyious.oas.data.model.AppInfo) -> Unit
-//
-//) {
-//    val apps by viewModel.apps.collectAsState()
-//    var query by remember { mutableStateOf("") }
-//    var isLoading by remember { mutableStateOf(false) }
-//    val coroutineScope = rememberCoroutineScope()
-//
-//
-//    LaunchedEffect(Unit) {
-//        isLoading = true
-//        try {
-//            viewModel.loadApps(forceRefresh = false)
-//        } finally {
-//            isLoading = false
-//        }
-//    }
-//
-//    val filtered = apps.filter {
-//        it.name.contains(query, ignoreCase = true) ||
-//                it.author?.contains(query, ignoreCase = true) == true
-//    }
-//
-//    Scaffold(
-//        topBar = {
-//            TopAppBar(
-//                title = { Text("Discover") },
-//                actions = {
-//                    IconButton(onClick = {
-//                        isLoading = true
-//                        coroutineScope.launch { // Use the coroutineScope to launch a new coroutine
-//                            isLoading = true
-//                            try {
-//                                viewModel.loadApps(forceRefresh = true) // Changed to true for refresh button
-//                            } finally {
-//                                isLoading = false
-//                            }
-//                        }
-//
-//                    }) {
-//                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-//                    }
-//                }
-//            )
-//        }
-//    ) { padding ->
-//        Column(Modifier.padding(padding)) {
-//            OutlinedTextField(
-//                value = query,
-//                onValueChange = { query = it },
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .padding(16.dp),
-//                placeholder = { Text("Search apps…") },
-//                singleLine = true,
-//                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
-//            )
-//            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-//                when {
-//                    isLoading -> CircularProgressIndicator()
-//                    filtered.isEmpty() -> Text("No apps found.", style = MaterialTheme.typography.bodyMedium)
-//                    else -> LazyColumn {
-//                        items(filtered) { app ->
-//                            AppRow(app = app, onClick = { onAppClick(app) })
-//                            Divider()
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//    }
-//}
-
-// In Discoverscreen.kt
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun Discoverscreen(
-    viewModel: DiscoverViewModel = viewModel(),
-    onAppClick: (AppInfo) -> Unit
+    indexRepository: IndexRepository,
+    onAppClick: (AppInfo) -> Unit,
+    category: String? = null
 ) {
-    val apps by viewModel.apps.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val progress by viewModel.progress.collectAsState()
-    val progressMessage by viewModel.progressMessage.collectAsState()
+    val viewModel: DiscoverViewModel = viewModel { DiscoverViewModel(indexRepository, category) }
+    val uiState by viewModel.uiState.collectAsState()
     var query by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        viewModel.loadApps(forceRefresh = false)
-    }
-
-    val filtered = remember(apps, query) {
-        apps.filter {
-            it.name.contains(query, ignoreCase = true) ||
-                    it.author?.contains(query, ignoreCase = true) == true
-        }
-    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Discover") },
+                title = { Text(if (category == null) "Discover" else "Discover in $category") },
                 actions = {
-                    var showRefreshDialog by remember { mutableStateOf(false) }
+                    var showConfirmDialog by remember { mutableStateOf(false) }
+                    val isLoading = uiState is DiscoverUiState.Loading
 
-                    // Show confirmation dialog when needed
-                    if (showRefreshDialog) {
+                    if (showConfirmDialog) {
                         AlertDialog(
-                            onDismissRequest = { showRefreshDialog = false },
+                            onDismissRequest = { showConfirmDialog = false },
                             title = { Text("Force Refresh") },
-                            text = { Text("This will ignore cache and fetch fresh data from the internet. Continue?") },
+                            text = { Text("This will clear the local cache and fetch the latest data from all sources. Continue?") },
                             confirmButton = {
-                                TextButton(
-                                    onClick = {
-                                        showRefreshDialog = false
-                                        viewModel.loadApps(forceRefresh = true)
-                                    }
-                                ) {
-                                    Text("Refresh")
-                                }
+                                Button({
+                                    showConfirmDialog = false
+                                    viewModel.loadApps(forceRefresh = true)
+                                }) { Text("Yes") }
                             },
                             dismissButton = {
-                                TextButton(onClick = { showRefreshDialog = false }) {
-                                    Text("Cancel")
-                                }
+                                Button({ showConfirmDialog = false }) { Text("No") }
                             }
                         )
                     }
 
-                    // Refresh button with combined clickable for both click and long-click
                     Box(
-                        modifier = Modifier
-                            .size(48.dp)  // Match IconButton size
-                            .combinedClickable(
-                                onClick = { viewModel.loadApps(forceRefresh = false) },
-                                onLongClick = {
-                                    showRefreshDialog = true
+                        modifier = Modifier.combinedClickable(
+                            onClick = {
+                                if (!isLoading) {
+                                    viewModel.loadApps(forceRefresh = false)
                                 }
-                            )
+                            },
+                            onLongClick = {
+                                showConfirmDialog = true
+                            }
+                        ).padding(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = if (isLoading) "Refreshing..." else "Refresh (long press to force refresh)",
-                            modifier = Modifier
-                                .padding(12.dp)  // Match IconButton padding
-                                .fillMaxSize()
-                        )
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
-
                 }
             )
         }
     ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            when {
-                isLoading -> {
-                    LoadingProgress(
-                        progress = progress,
-                        message = progressMessage,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                placeholder = { Text(if (category == null) "Search apps..." else "Search in $category...") },
+                leadingIcon = { Icon(Icons.Default.Search, null) }
+            )
+
+            when (val state = uiState) {
+                is DiscoverUiState.Loading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        LoadingProgress(progress = -1f, message = "Loading apps...")
+                    }
                 }
-                filtered.isEmpty() -> {
-                    Text(
-                        "No apps found.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                is DiscoverUiState.Error -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(text = "Error loading apps.")
+                    }
                 }
-                else -> {
-                    Column {
-                        OutlinedTextField(
-                            value = query,
-                            onValueChange = { query = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            placeholder = { Text("Search apps...") },
-                            leadingIcon = { Icon(Icons.Default.Search, null) }
-                        )
-                        LazyColumn {
-                            items(filtered) { app ->
-                                AppRow(
-                                    app = app,
-                                    onClick = { onAppClick(app) }
-                                )
-                                Divider()
-                            }
+                is DiscoverUiState.Success -> {
+                    val apps = state.apps
+                    val filtered = remember(apps, query) {
+                        apps.filter {
+                            it.name.contains(query, ignoreCase = true) ||
+                                    it.author?.contains(query, ignoreCase = true) == true
                         }
+                    }
+
+                    if (filtered.isEmpty()) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                if (query.isEmpty()) "No apps found." else "No results for \"$query\"",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    } else {
+                        AppList(apps = filtered, onAppClick = onAppClick)
                     }
                 }
             }
@@ -269,46 +139,55 @@ fun Discoverscreen(
 }
 
 @Composable
-private fun AppRow(
-    app: io.github.skyious.oas.data.model.AppInfo,
-    onClick: () -> Unit
-) {
+fun AppList(apps: List<AppInfo>, onAppClick: (AppInfo) -> Unit) {
+    LazyColumn {
+        items(apps, key = { it.id ?: it.hashCode() }) { app ->
+            AppRow(
+                app = app,
+                onClick = { onAppClick(app) }
+            )
+            Divider()
+        }
+    }
+}
+
+@Composable
+fun AppRow(app: AppInfo, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
             .clickable { onClick() }
             .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Image(
-            painter = rememberAsyncImagePainter(app.logoUrl),
-            contentDescription = "${app.name} logo",
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-        )
-        Column {
+        if (app.logoUrl.isNullOrBlank()) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = app.name.take(1),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            AsyncImage(
+                model = app.logoUrl,
+                contentDescription = "${app.name} logo",
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
             Text(app.name, style = MaterialTheme.typography.titleMedium)
-            Text("by ${app.author}", style = MaterialTheme.typography.bodySmall)
+            Text("by ${app.author.orEmpty()}", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
-
-
-
-
-
-@Composable
-fun DebugDiscoverscreen(
-    viewModel: DiscoverViewModel = viewModel()
-) {
-    val apps by viewModel.apps.collectAsState()
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Raw apps count: ${apps.size}")
-        Button(onClick = { viewModel.loadApps(forceRefresh = true) }) {
-            Text("Force Refresh")
-        }
-    }
-}
-
-

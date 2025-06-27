@@ -1,10 +1,12 @@
 package io.github.skyious.oas.data
 
+import io.github.skyious.oas.data.model.FDroidRepo
+
 // FdroidRepos.kt
-object FdroidRepos {
-    val ALL: List<String> = listOf(
-        "https://f-droid.org/repo",
-        "https://f-droid.org/repo/index-v1.jar",
+//object FdroidRepos {
+   // val ALL: List<String> = listOf(
+       // "https://f-droid.org/repo",
+//       "https://f-droid.org/repo/index-v1.jar",
        /* "https://f-droid.org/archive",
         "https://guardianproject.info/fdroid/repo",
         "https://guardianproject.info/fdroid/archive",
@@ -251,5 +253,17 @@ object FdroidRepos {
         "https://fdroid.shiftphones.com/fdroid/archive",
         "https://kotikone.xyz/fdroid/repo",
         "https://kotikone.xyz/fdroid/archive" */
+  //  )
+//}
+
+object FdroidRepos {
+    val OFFICIAL = FDroidRepo(
+        name = "F-Droid",
+        address = "https://f-droid.org/repo/",
+        archiveUrl = "https://f-droid.org/archive/",
+        publicKey = "43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed15528acc99af5454b61"
     )
+
+    // Per user request, focusing on a single JAR file source to fix the issue.
+    val ALL = listOf(OFFICIAL)
 }

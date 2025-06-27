@@ -1,8 +1,9 @@
-package com.myorg.oneappstore.shared.util // Adapt to your actual package name
+package io.github.skyious.oas.data // Adapt to your actual package name
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -11,6 +12,10 @@ import java.net.URL
 import java.net.URLEncoder
 import java.util.zip.ZipInputStream
 import io.github.skyious.oas.data.model.AppInfo // Adapt to your actual AppInfo model path
+import io.github.skyious.oas.data.model.FDroidRepo
+import java.io.ByteArrayInputStream
+import java.util.jar.JarInputStream
+import kotlin.text.Charsets
 
 object FdroidUtils {
 
@@ -68,6 +73,21 @@ object FdroidUtils {
                     return@withContext emptyList()
                 }
                 Log.d(TAG, "'apps' JSONArray found with length: ${appsArray.length()}")
+
+                val packagesObject = rootJson.optJSONObject("packages")
+                val packagesMap = mutableMapOf<String, MutableList<String>>()
+                if (packagesObject != null) {
+                    for (packageName in packagesObject.keys()) {
+                        val packageArray = packagesObject.optJSONArray(packageName)
+                        if (packageArray != null) {
+                            val packageList = mutableListOf<String>()
+                            for (i in 0 until packageArray.length()) {
+                                packageList.add(packageArray.optString(i, ""))
+                            }
+                            packagesMap[packageName] = packageList
+                        }
+                    }
+                }
 
                 for (i in 0 until appsArray.length()) {
                     val appObject = appsArray.getJSONObject(i)
@@ -188,16 +208,16 @@ object FdroidUtils {
                     // --- End Debugging ---
 
 
-                    val packagesArray = appObject.optJSONArray("packages")
+                    val packageList = packagesMap[packageName] ?: emptyList()
                     var latestVersionName: String? = null
                     var downloadUrl: String? = null
 
-                    if (packagesArray != null && packagesArray.length() > 0) {
+                    if (packageList.isNotEmpty()) {
                         // Assuming the first package in the array is the most recent/relevant one
                         // More sophisticated logic might be needed to pick the "best" package
-                        val latestPackageObject = packagesArray.getJSONObject(0) // Or loop to find highest versionCode
-                        latestVersionName = latestPackageObject.optString("versionName", null)
-                        val apkName = latestPackageObject.optString("apkName", null)
+                        val latestPackage = packageList.first() // Or loop to find highest versionCode
+                        latestVersionName = latestPackage
+                        val apkName = latestPackage
                         if (apkName != null) {
                             val encodedApkName = URLEncoder.encode(apkName, "UTF-8")
                             downloadUrl = "$repoBaseUrl$encodedApkName" // APKs are usually at the repo root + apkName
@@ -288,4 +308,66 @@ object FdroidUtils {
             null
         }
     }
+
+    fun extractEntryJsonFromJar(jarBytes: ByteArray): String? {
+        Log.d("FDroidUtils_Debug", "Starting extraction from JAR bytes (size: ${jarBytes.size})")
+        ZipInputStream(ByteArrayInputStream(jarBytes)).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                Log.d("FDroidUtils_Debug", "Found JAR entry: ${entry.name}") // Log every entry
+                if (entry.name == "entry.json") {
+                    Log.i("FDroidUtils_Debug", "Found 'entry.json'. Reading content.")
+                    val content = zis.bufferedReader().readText()
+                    Log.d("FDroidUtils_Debug", "Successfully extracted 'entry.json' (size: ${content.length})")
+                    return content
+                }
+                entry = zis.nextEntry
+            }
+        }
+        Log.w("FDroidUtils_Debug", "entry.json not found in JAR.")
+        return null
+    }
+
+    /**
+     * Extracts the `index-v1.json` file from the raw bytes of an F-Droid `index-v1.jar` file.
+     * The official F-Droid repo now serves a JAR containing this JSON file instead of the old XML file.
+     */
+    fun extractIndexV1JsonFromJar(jarBytes: ByteArray): String? {
+        Log.d("FDroidUtils_Debug", "Attempting to extract index-v1.json from JAR bytes.")
+        JarInputStream(ByteArrayInputStream(jarBytes)).use { jis ->
+            var ze = jis.nextJarEntry
+            while (ze != null) {
+                Log.v("FDroidUtils_Debug", "Found JAR entry: ${ze.name}")
+                if (ze.name == "index-v1.json") {
+                    Log.i("FDroidUtils_Debug", "Found index-v1.json, extracting content.")
+                    return jis.bufferedReader(Charsets.UTF_8).readText()
+                }
+                ze = jis.nextJarEntry
+            }
+        }
+        Log.w("FDroidUtils_Debug", "index-v1.json not found in JAR.")
+        return null
+    }
+
+    // Deprecated: The official F-Droid repo no longer provides index.xml in its v1 JAR.
+    // Kept for reference or compatibility with very old/custom repos.
+    /*
+    fun extractIndexXmlFromJar(jarBytes: ByteArray): String? {
+        Log.d("FDroidUtils_Debug", "Attempting to extract index.xml from JAR bytes.")
+        JarInputStream(ByteArrayInputStream(jarBytes)).use { jis ->
+            var ze = jis.nextJarEntry
+            while (ze != null) {
+                Log.d("FDroidUtils_Debug", "Found JAR entry: ${ze.name}")
+                if (ze.name == "index.xml") {
+                    Log.i("FDroidUtils_Debug", "Found index.xml, extracting content.")
+                    return jis.bufferedReader(Charsets.UTF_8).readText()
+                }
+                ze = jis.nextJarEntry
+            }
+        }
+        Log.w("FDroidUtils_Debug", "index.xml not found in JAR.")
+        return null
+    }
+    */
+
 }

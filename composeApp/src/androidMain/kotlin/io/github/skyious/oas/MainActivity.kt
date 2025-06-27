@@ -1,6 +1,6 @@
-// androidApp/src/main/java/io/github/skyious/oas/MainActivity.kt
 package io.github.skyious.oas
 
+import AppDetailsScreen
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,19 +15,22 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.*
+import androidx.navigation.navArgument
+import io.github.skyious.oas.data.IndexRepository
+import io.github.skyious.oas.data.SettingsRepository
 import io.github.skyious.oas.data.model.AppInfo
 import io.github.skyious.oas.ui.SharedViewModel
 import io.github.skyious.oas.screens.Discoverscreen
 import io.github.skyious.oas.screens.Categoriesscreen
-import io.github.skyious.oas.screens.Libraryscreen
+import io.github.skyious.oas.screens.LibraryScreen
 import io.github.skyious.oas.screens.Settingsscreen
-import io.github.skyious.oas.screens.DetailScreen
 import io.github.skyious.oas.items.BottomNavBar
 import io.github.skyious.oas.items.NavItem
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,22 +38,23 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
-                // Shared ViewModel for selection
                 val sharedVM: SharedViewModel = viewModel<SharedViewModel>()
                 val navController = rememberNavController()
-                // Observe nav backstack to determine current route for bottom bar highlight
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
                 var darkModeEnabled by rememberSaveable { mutableStateOf(false) }
 
+                val context = LocalContext.current
+                val settingsRepository = remember { SettingsRepository(context) }
+                val indexRepository = remember { IndexRepository(context, settingsRepository) }
 
-                // You may want to hide bottom bar on detail screen:
-                val showBottomBar = when (currentRoute) {
-                    NavItem.Discover.route,
-                    NavItem.Categories.route,
-                    NavItem.Library.route,
-                    NavItem.Settings.route -> true
-                    else -> false
+                val showBottomBar = remember(currentRoute) {
+                    listOf(
+                        NavItem.Discover.route,
+                        NavItem.Categories.route,
+                        NavItem.Library.route,
+                        NavItem.Settings.route
+                    ).any { currentRoute?.startsWith(it) == true }
                 }
 
                 AppTheme(darkTheme = darkModeEnabled) {
@@ -58,13 +62,10 @@ class MainActivity : ComponentActivity() {
                         bottomBar = {
                             if (showBottomBar) {
                                 BottomNavBar(currentRoute.toString()) { selectedRoute ->
-                                    // navigate to the selected bottom tab
                                     navController.navigate(selectedRoute) {
-                                        // Pop up to the start destination of graph to avoid building back stack
                                         popUpTo(navController.graph.startDestinationId) {
                                             saveState = true
                                         }
-                                        // Avoid multiple copies
                                         launchSingleTop = true
                                         restoreState = true
                                     }
@@ -77,19 +78,34 @@ class MainActivity : ComponentActivity() {
                             startDestination = NavItem.Discover.route,
                             modifier = Modifier.padding(innerPadding)
                         ) {
-                            composable(NavItem.Discover.route) {
+                            composable(
+                                route = NavItem.Discover.route + "?category={category}",
+                                arguments = listOf(navArgument("category") {
+                                    type = NavType.StringType
+                                    nullable = true
+                                })
+                            ) {
                                 Discoverscreen(
+                                    indexRepository = indexRepository,
                                     onAppClick = { appInfo ->
                                         sharedVM.selectApp(appInfo)
                                         navController.navigate("detail")
-                                    }
+                                    },
+                                    category = it.arguments?.getString("category")
                                 )
                             }
                             composable(NavItem.Categories.route) {
-                                Categoriesscreen()
+                                Categoriesscreen(
+                                    indexRepository = indexRepository,
+                                    onCategoryClick = { category ->
+                                        navController.navigate(NavItem.Discover.route + "?category=$category")
+                                    }
+                                )
                             }
                             composable(NavItem.Library.route) {
-                                Libraryscreen()
+                                LibraryScreen(
+                                    onAppClick = { /* TODO: Open app or details */ }
+                                )
                             }
                             composable(NavItem.Settings.route) {
                                 Settingsscreen(
@@ -101,7 +117,7 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("detail") {
                                 sharedVM.selectedApp.collectAsState().value?.let { appInfo ->
-                                    DetailScreen(
+                                    AppDetailsScreen(
                                         appInfo = appInfo,
                                         onBackPress = { navController.popBackStack() }
                                     )
@@ -116,7 +132,6 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-
 actual fun AppLogo() {
     Image(
         painter = androidx.compose.ui.res.painterResource(id = R.drawable.oas_logo),

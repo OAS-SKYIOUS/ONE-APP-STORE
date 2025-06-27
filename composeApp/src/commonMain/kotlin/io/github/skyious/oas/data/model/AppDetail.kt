@@ -31,7 +31,16 @@ data class AppDetail(
     val changelog: String? = null,
     @Serializable(with = MapStringAnySerializer::class)
     val otherFields: Map<String, Any?> = emptyMap()
-)
+) {
+    companion object {
+        // These keys are handled as direct properties in AppDetail and should be excluded from the 'otherFields' map.
+        val MAIN_KEYS = setOf(
+            "id", "name", "packagename", "author", "summary", "description",
+            "logourl", "downloadurl", "version", "source", "images",
+            "screenshots", "changelog"
+        )
+    }
+}
 
 @Serializable
 data class AppInfo(

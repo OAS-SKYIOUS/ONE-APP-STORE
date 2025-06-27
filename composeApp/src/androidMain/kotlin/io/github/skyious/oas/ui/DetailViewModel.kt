@@ -21,20 +21,26 @@ sealed interface DetailUiState {
 class DetailViewModel(app: Application) : AndroidViewModel(app) {
     // This is not ideal, should be using DI. For now, this is okay.
     private val settingsRepo = SettingsRepository(app)
-    private val indexRepo = IndexRepository(app, settingsRepo, settingsRepo)
+    private val indexRepo = IndexRepository(app, settingsRepo)
 
     private val _uiState = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
 
     fun loadDetail(appInfo: AppInfo) {
+        val appId = appInfo.id
+        if (appId == null) {
+            _uiState.value = DetailUiState.Error("App has no ID.")
+            return
+        }
+
         viewModelScope.launch {
             _uiState.value = DetailUiState.Loading
             try {
-                val detail = indexRepo.fetchAppDetail(appInfo)
+                val detail = indexRepo.fetchAppDetail(appId)
                 if (detail != null) {
                     _uiState.value = DetailUiState.Success(detail)
                 } else {
-                    _uiState.value = DetailUiState.Error("Could not load app details.")
+                    _uiState.value = DetailUiState.Error("App details not found.")
                 }
             } catch (e: Exception) {
                 _uiState.value = DetailUiState.Error(e.message ?: "An unknown error occurred.")
