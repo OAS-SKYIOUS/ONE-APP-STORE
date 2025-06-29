@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,7 +31,6 @@ fun Discoverscreen(
 ) {
     val viewModel: DiscoverViewModel = viewModel { DiscoverViewModel(indexRepository, category) }
     val uiState by viewModel.uiState.collectAsState()
-    var query by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -89,16 +87,6 @@ fun Discoverscreen(
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                placeholder = { Text(if (category == null) "Search apps..." else "Search in $category...") },
-                leadingIcon = { Icon(Icons.Default.Search, null) }
-            )
-
             when (val state = uiState) {
                 is DiscoverUiState.Loading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -112,25 +100,19 @@ fun Discoverscreen(
                 }
                 is DiscoverUiState.Success -> {
                     val apps = state.apps
-                    val filtered = remember(apps, query) {
-                        apps.filter {
-                            it.name.contains(query, ignoreCase = true) ||
-                                    it.author?.contains(query, ignoreCase = true) == true
-                        }
-                    }
 
-                    if (filtered.isEmpty()) {
+                    if (apps.isEmpty()) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                if (query.isEmpty()) "No apps found." else "No results for \"$query\"",
+                                "No apps found.",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
                     } else {
-                        AppList(apps = filtered, onAppClick = onAppClick)
+                        AppList(apps = apps, onAppClick = onAppClick)
                     }
                 }
             }

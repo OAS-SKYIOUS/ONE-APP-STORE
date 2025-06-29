@@ -14,6 +14,7 @@ fun BottomNavBar(
             NavItem.Discover,
             NavItem.Categories,
             NavItem.Library,
+            NavItem.Fdroid,
             NavItem.Settings
         ).forEach { item ->
             NavigationBarItem(

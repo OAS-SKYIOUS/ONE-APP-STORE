@@ -21,7 +21,7 @@ import coil.compose.rememberAsyncImagePainter
 
 @Composable
 fun LibraryScreen(
-    onAppClick: (String) -> Unit
+    onAppClick: ((String) -> Unit)?
 ) {
     val viewModel: LibraryViewModel = viewModel()
     val installedApps by viewModel.installedApps.collectAsState()
@@ -40,7 +40,7 @@ fun LibraryScreen(
             items(installedApps) { app ->
                 InstalledAppRow(
                     app = app,
-                    onClick = { onAppClick(app.packageName) }
+                    onClick = { onAppClick?.invoke(app.packageName) }
                 )
                 Divider()
             }

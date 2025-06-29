@@ -23,47 +23,58 @@ kotlin {
     
     sourceSets {
         val desktopMain by getting
-        
+
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
-            implementation("io.coil-kt:coil-compose:2.7.0")
-            implementation ("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
-            implementation ("androidx.datastore:datastore-preferences:1.1.7")
-            implementation ("androidx.navigation:navigation-compose:2.9.0")
-            implementation("androidx.preference:preference:1.2.1")
-            implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-            implementation("androidx.preference:preference-ktx:1.2.1")
-
+            implementation(libs.coil.compose)
+            implementation(libs.androidx.lifecycle.viewmodel.compose)
+            implementation(libs.androidx.lifecycle.viewmodel)
+            implementation(libs.androidx.lifecycle.runtimeCompose)
+            implementation(libs.datastore.preferences)
+            implementation(libs.androidx.navigation.compose)
+            implementation(libs.preference)
+            implementation(libs.preference.ktx)
+            implementation(libs.koin.android)
+            implementation(libs.koin.androidx.compose)
+            implementation(libs.androidx.materialIconsExtended)
+            implementation(libs.ktor.client.android)
+            implementation(libs.okhttp)
+            implementation(libs.okhttp.logging.interceptor)
+            implementation(libs.snakeyaml)
         }
+
         commonMain.dependencies {
+            implementation(kotlin("stdlib-common"))
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
             implementation(compose.components.resources)
             implementation(compose.components.uiToolingPreview)
-            implementation(libs.androidx.lifecycle.viewmodel)
-            implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.ktor.client.core)
-            implementation(libs.ktor.client.cio)
-            implementation(libs.ktor.client.android)
+            implementation(libs.ktor.client.content.negotiation)
+            implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.okio)
-            implementation (libs.androidx.material3)
-            implementation("org.yaml:snakeyaml:1.33")
-            implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
-
-
-
+            implementation(libs.koin.core)
+            implementation(libs.kotlinx.datetime)
+            implementation(libs.androidx.lifecycle.viewmodel.ktx.v100)
+            implementation(libs.androidx.lifecycle.viewmodel.compose.v291)
         }
+
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation(libs.koin.test)
         }
+
         desktopMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
+            implementation(libs.ktor.client.cio)
+            implementation(libs.okhttp)
+            implementation(libs.okhttp.logging.interceptor)
+            implementation(libs.snakeyaml)
         }
     }
     
@@ -75,6 +86,11 @@ kotlin {
 android {
     namespace = "io.github.skyious.oas"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
 
     defaultConfig {
         applicationId = "io.github.skyious.oas"

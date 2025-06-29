@@ -96,23 +96,23 @@ fun CategoryCard(category: String, onClick: () -> Unit) {
 
 fun getIconForCategory(category: String): ImageVector {
     return when (category) {
-        "Connectivity" -> R.drawable.wifi
+        "Connectivity" -> Icons.Filled.Wifi
         "Development" -> Icons.Default.Build
-        "Games" -> R.drawable.stadia_controller
-        "Graphics" -> R.drawable.palette
-        "Internet" -> R.drawable.language
-        "Money" -> R.drawable.attach_money
-        "Multimedia" -> R.drawable.video_library
-        "Navigation" -> R.drawable.map
+        "Games" -> Icons.Filled.SportsEsports
+        "Graphics" -> Icons.Filled.Palette
+        "Internet" -> Icons.Filled.Language
+        "Money" -> Icons.Filled.AttachMoney
+        "Multimedia" -> Icons.Filled.VideoLibrary
+        "Navigation" -> Icons.Filled.Map
         "Phone & SMS" -> Icons.Default.Phone
-        "Reading" -> R.drawable.book
-        "Science & Education" -> R.drawable.school
-        "Security" -> R.drawable.security
-        "Sports & Health" -> R.drawable.fitness_center
+        "Reading" -> Icons.Filled.Book
+        "Science & Education" -> Icons.Filled.School
+        "Security" -> Icons.Filled.Security
+        "Sports & Health" -> Icons.Filled.FitnessCenter
         "System" -> Icons.Default.Settings
-        "Theming" -> R.drawable.brush
-        "Time" -> R.drawable.schedule
+        "Theming" -> Icons.Filled.Brush
+        "Time" -> Icons.Filled.Schedule
         "Writing" -> Icons.Default.Create
-        else -> R.drawable.apps
-    } as ImageVector
+        else -> Icons.Filled.Apps
+    }
 }
